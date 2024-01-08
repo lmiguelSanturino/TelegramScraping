@@ -1,0 +1,175 @@
+#para bitcoin
+from bs4 import BeautifulSoup   
+import requests
+import telebot
+from telebot.types import ReplyKeyboardMarkup #creacion de botones 
+from telebot.types import ForceReply #respuesta
+import asyncio
+import time
+from datetime import datetime, timedelta
+import threading
+
+token = 'YourToken'
+bot =telebot.TeleBot(token)
+usuarios={}
+registrado="No"
+
+
+
+@bot.message_handler(commands=['start', 'help', 'ayuda'])
+def cmd_start(message):
+    """muestra comandos"""
+    bot.send_message(message.chat.id,
+    """Los comandos disponibles son los siguientes
+    Nota: Para acceder a las funcionalidades relacionadas con Bitcoin primero debes estar dado de /alta.
+    /info -> Te resumiré mi funcionalidad
+    /alta-> Te haré una serie de preguntas que guardaré en mi base de datos
+    /help -> Te volverá a aparecer esta lista por si no te acuerdas de algún nombre
+    /precio_bitcoin -> Te diré el precio actual del Bitcoin
+    /pagina_bitcoin -> Te mandaré el enlace a la página de la cual recojo la información del bitcoin
+    Usa el comando /alta para introducir tus datos""")
+    
+@bot.message_handler(commands=['info'])
+def cmd_info(message):
+    bot.send_message(message.chat.id,"""¡Hola!
+
+    Soy un bot que te permitirá saber el precio del bitcoin en tiempo real.
+    Además, realizo cuestionarios para almacenar información sobre distintos campos que me interesan para poder mejorar mi funcionalidad.
+    Si comienzas un cuestionario y no respondes en 1 minuto, te lo recordaré mandándote un mensaje.
+    Si quieres saber la lista de comandos disponibles, puedes escribir /start o /help.
+    """)
+    
+def recordar_respuestaNombre(chat_id):
+    time.sleep(60)  # Pausar la ejecución por 10 segundos
+
+    # Verificar si el usuario ha respondido en el tiempo establecido
+    while chat_id in usuarios and 'nombre' not in usuarios[chat_id]:
+        # Enviar un recordatorio al usuario
+        bot.send_message(chat_id, "Recuerda introducir tu nombre. ¡El tiempo está corriendo!")
+        time.sleep(60)
+
+def recordar_respuestaEdad(chat_id):
+    time.sleep(60)  # Pausar la ejecución por 10 segundos
+
+    # Verificar si el usuario ha respondido en el tiempo establecido
+    while chat_id in usuarios and 'edad' not in usuarios[chat_id]:
+        # Enviar un recordatorio al usuario
+        bot.send_message(chat_id, "Recuerda introducir tu edad. ¡El tiempo está corriendo!")
+        time.sleep(60)
+        
+def recordar_respuestaGenero(chat_id):
+    time.sleep(60)  # Pausar la ejecución por 10 segundos
+
+    # Verificar si el usuario ha respondido en el tiempo establecido
+    while chat_id in usuarios and 'genero' not in usuarios[chat_id]:
+        # Enviar un recordatorio al usuario
+        bot.send_message(chat_id, "Recuerda introducir tu género. ¡El tiempo está corriendo!")
+        time.sleep(60)
+        
+def recordar_respuestaInvierte(chat_id):
+    time.sleep(60)  # Pausar la ejecución por 10 segundos
+
+    # Verificar si el usuario ha respondido en el tiempo establecido
+    while chat_id in usuarios and 'invierte' not in usuarios[chat_id]:
+        # Enviar un recordatorio al usuario
+        bot.send_message(chat_id, "Recuerda introducir si inviertes. ¡El tiempo está corriendo!")
+        time.sleep(60)
+        
+@bot.message_handler(commands=['alta'])
+def cmd_alta(message):
+    usuarios[message.chat.id]={} 
+    markup= ForceReply()
+    msg =bot.send_message(message.chat.id,"Introduce tu nombre",reply_markup=markup)
+    bot.register_next_step_handler(msg,edad)
+    time_thread = threading.Thread(target=recordar_respuestaNombre, args=(message.chat.id,))
+    time_thread.start()
+
+
+def edad(message): 
+    usuarios[message.chat.id]["nombre"]=message.text   
+    markup= ForceReply()
+    msg=bot.send_message(message.chat.id,"Introduce tu edad ",reply_markup=markup)
+    bot.register_next_step_handler(msg,genero)
+    time_thread = threading.Thread(target=recordar_respuestaEdad, args=(message.chat.id,))
+    time_thread.start()
+   
+def genero(message):
+    if not message.text.isdigit():
+        markup= ForceReply()
+        msg=bot.send_message(message.chat.id,"ERROR: Debes indicar un numero para tu edad.\n Introduce tu edad ",reply_markup=markup)
+        bot.register_next_step_handler(msg,genero)
+        
+    else: 
+        usuarios[message.chat.id]["edad"]=int(message.text)
+        markup=ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder= "Pulsa un boton")
+        markup.add("Hombre", "Mujer")
+        msg=bot.send_message(message.chat.id,"Indica tu genero",reply_markup=markup)
+        bot.register_next_step_handler(msg,invertir)
+        time_thread = threading.Thread(target=recordar_respuestaGenero, args=(message.chat.id,))
+        time_thread.start()
+        
+def invertir(message):
+    if message.text != "Hombre" and message.text != "Mujer":
+        msg=bot.send_message(message.chat.id,"ERROR: genero no valido.\n Introduce tu genero ")
+        bot.register_next_step_handler(msg,invertir)
+        
+    else:
+        usuarios[message.chat.id]["genero"]=message.text
+        markup=ReplyKeyboardMarkup(one_time_keyboard=True, input_field_placeholder= "Pulsa un boton")
+        markup.add("Si", "No")
+        msg=bot.send_message(message.chat.id,"¿Inviertes en BitCoin?",reply_markup=markup)
+        bot.register_next_step_handler(msg,guardar_usuario)
+        time_thread = threading.Thread(target=recordar_respuestaInvierte, args=(message.chat.id,))
+        time_thread.start()
+
+def guardar_usuario(message):
+    if message.text != "Si" and message.text != "No":
+        msg=bot.send_message(message.chat.id,"ERROR: Solo es valido Si o No.\n¿Inviertes en Bitcoin? ")
+        bot.register_next_step_handler(msg,guardar_usuario)
+       
+    else:
+        usuarios[message.chat.id]["invierte"]=message.text
+        global registrado
+        registrado="Si"
+        texto='Datos introducidos:\n'
+        texto+=f'<code>NOMBRE:</code>{usuarios[message.chat.id]["nombre"]}\n'
+        texto+=f'<code>EDAD:</code>{usuarios[message.chat.id]["edad"]}\n'
+        texto+=f'<code>GENERO:</code>{usuarios[message.chat.id]["genero"]}\n'
+        texto+=f'<code>INVIERTE:</code>{usuarios[message.chat.id]["invierte"]}\n'
+        bot.send_message(message.chat.id,texto,parse_mode="html")
+        bot.send_message(message.chat.id,"Ya estás dad@ de alta! Puedes usar todas las funciones!")
+        
+@bot.message_handler(commands=['precio_bitcoin'])
+def cmd_precio_botcoin(message):
+    global registrado
+    if registrado=="No":
+        bot.send_message(message.chat.id,"Debes darte de alta con el comando /alta para poder acceder a esta informacion ")
+    else:
+        valor = btc_scraping()
+        bot.send_message(message.chat.id,"El precio de BitCoin es: "+valor)
+        
+def btc_scraping():
+    url = requests.get('https://awebanalysis.com/es/coin-details/bitcoin/')
+    soup = BeautifulSoup(url.content, 'html.parser')
+    result = soup.find('td', {'class': 'text-larger text-price'})
+    format_result = result.text
+
+    return format_result
+
+@bot.message_handler(commands=['pagina_bitcoin'])
+def cmd_pagina_bitcoin(message):
+    global registrado
+    if registrado=="No":
+        bot.send_message(message.chat.id,"Debes darte de alta con el comando /alta para poder acceder a esta informacion ")
+    else:
+        bot.send_message(message.chat.id,"El link de la pagina de la cual estoy obteniendo el valor del bitcoin es : 'https://awebanalysis.com/es/coin-details/bitcoin/ ")
+
+#main 
+
+
+if __name__ == '__main__':
+
+    print('Iniciando bot...')
+    #iniciar bot
+    print('Bot iniciado')
+    bot.infinity_polling()
